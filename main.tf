@@ -55,7 +55,7 @@ resource "azurerm_subnet" "web_server_subnet"{
  }
  # Network Interface configuration
 resource "azurerm_network_interface" "web_server_nic"{
-  name                      =  "${var.web_server_name}-${format("%02d", count.index)}-nic"
+  name                      = "${var.web_server_name}-${format("%02d", count.index)}-nic"
   location                  = "${var.web_server_location}"
   resource_group_name       = "${azurerm_resource_group.web_server_rg.name}"
   count                     = "${var.web_server_count}"
