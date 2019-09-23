@@ -11,6 +11,7 @@ variable "web_server_address_space" {}
 variable "web_server_address_prefix" {}
 variable "web_server_name" {}
 variable "environment" {}
+variable "web_server_count" {}
 
 # Configure the Azure Provider
 provider "azurerm" {
@@ -42,38 +43,41 @@ resource "azurerm_subnet" "web_server_subnet"{
   resource_group_name  = "${azurerm_resource_group.web_server_rg.name}"
   virtual_network_name = "${azurerm_virtual_network.web_server_vnet.name}"
   address_prefix       = "${var.web_server_address_prefix}"
+  network_security_group_id = "${azurerm_network_security_group.web_server_nsg.id}"
 }
+# Public IP Address
  resource "azurerm_public_ip" "web_server_publicip"{
-   name                           = "${var.resource_prefix}-pubip"
+   name                           = "${var.resource_prefix}-${format("%02d", count.index)}-pubip"
    location                       = "${var.web_server_location}"
    resource_group_name            = "${azurerm_resource_group.web_server_rg.name}"
    allocation_method              = "Dynamic"
+   count                          = "${var.web_server_count}"
  }
+ # Network Interface configuration
 resource "azurerm_network_interface" "web_server_nic"{
-  name                      = "${var.web_server_name}-nic"
+  name                      =  "${var.web_server_name}-${format("%02d", count.index)}-nic"
   location                  = "${var.web_server_location}"
   resource_group_name       = "${azurerm_resource_group.web_server_rg.name}"
-  network_security_group_id = "${azurerm_network_security_group.web_server_nsg.id}"
+  count                     = "${var.web_server_count}"
 
   ip_configuration {
-    name                          = "${var.web_server_name}-ip"
+    name                          = "${var.web_server_name}-${format("%02d", count.index)}-ip"
     subnet_id                     = "${azurerm_subnet.web_server_subnet.id}"
-    public_ip_address_id          = "${azurerm_public_ip.web_server_publicip.id}"
+    public_ip_address_id          = "${azurerm_public_ip.web_server_publicip.*.id[count.index]}"
 
     # public ip allocation - uncomment the following line of code
     # private_ip_address_allocation = "dynamic"
-    
     # conditional public ip allocation - uncomment the folloiwng line of code
     private_ip_address_allocation = "${var.environment == "production" ? "Static" : "Dynamic"}"
   }
 }
-
+# NSG Creation
 resource "azurerm_network_security_group" "web_server_nsg" {
   name = "${var.resource_prefix}-nsg"
   location = "${var.web_server_location}"
   resource_group_name = "${azurerm_resource_group.web_server_rg.name}"
 }
-
+# Rule-set for NSG
 resource "azurerm_network_security_rule" "web_server_nsg_rule_rdp" {
   name = "RDP Inbound"
   priority = 100
@@ -91,29 +95,30 @@ resource "azurerm_network_security_rule" "web_server_nsg_rule_rdp" {
 # Creating the Virutal Machine
 
 resource "azurerm_virtual_machine" "web_server" {
-  name                  = "${var.web_server_name}"
+  name                  = "${var.web_server_name}-${format("%02d", count.index)}"
   location              = "${var.web_server_location}"
   resource_group_name   = "${azurerm_resource_group.web_server_rg.name}"
-  network_interface_ids = ["${azurerm_network_interface.web_server_nic.id}"]
+  network_interface_ids = ["${azurerm_network_interface.web_server_nic.*.id[count.index]}"]
   vm_size               = "Standard_B1s"
-  availability_set_id = "${azurerm_availability_set.web_server_availability_set.id}"
+  availability_set_id   = "${azurerm_availability_set.web_server_availability_set.id}"
+  count                 = "${var.web_server_count}"
 
   storage_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2016-Datacenter-Server-Core-smalldisk"
-    version   = "latest"
+    publisher           = "MicrosoftWindowsServer"
+    offer               = "WindowsServer"
+    sku                 = "2016-Datacenter-Server-Core-smalldisk"
+    version             = "latest"
   }
 
   storage_os_disk {
-     name               = "${var.web_server_name}-os"
+     name               = "${var.web_server_name}-${format("%02d", count.index)}-os"
      caching            = "ReadWrite"
      create_option      = "FromImage"
      managed_disk_type  = "Standard_LRS"
   }
 
   os_profile {
-    computer_name   = "${var.web_server_name}"
+    computer_name   = "${var.web_server_name}-${format("%02d", count.index)}"
     admin_username  = "cenzer2"
     admin_password  = "P@ssw0rd@1234"
   }
@@ -121,6 +126,7 @@ resource "azurerm_virtual_machine" "web_server" {
   os_profile_windows_config {}
 }
 
+# Availability Set for Virtual Machine
 resource "azurerm_availability_set" "web_server_availability_set" {
   name                        = "${var.web_server_name}"
   location                    = "${var.web_server_location}"
@@ -128,7 +134,6 @@ resource "azurerm_availability_set" "web_server_availability_set" {
   managed                     = true
   platform_fault_domain_count = 2
 }
-
 
 #resource "azurerm_storage_account" "strgacc" {
  # name                      = "${var.resource_prefix}strgacc"
