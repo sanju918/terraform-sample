@@ -8,10 +8,14 @@ variable "web_server_location" {}
 variable "web_server_rg" {}
 variable "resource_prefix" {}
 variable "web_server_address_space" {}
-variable "web_server_address_prefix" {}
+#variable "web_server_address_prefix" {}
 variable "web_server_name" {}
 variable "environment" {}
 variable "web_server_count" {}
+variable "web_server_subnets" {
+  type = "list"
+}
+
 
 # Configure the Azure Provider
 provider "azurerm" {
@@ -39,11 +43,12 @@ resource "azurerm_virtual_network" "web_server_vnet" {
 
 #Create a subnet
 resource "azurerm_subnet" "web_server_subnet"{
-  name                 = "${var.resource_prefix}-subnet"
-  resource_group_name  = "${azurerm_resource_group.web_server_rg.name}"
-  virtual_network_name = "${azurerm_virtual_network.web_server_vnet.name}"
-  address_prefix       = "${var.web_server_address_prefix}"
+  name                      = "${var.resource_prefix}-${substr(var.web_server_subnets[count.index], 0, length(var.web_server_subnets[count.index]) - 3)}-subnet"
+  resource_group_name       = "${azurerm_resource_group.web_server_rg.name}"
+  virtual_network_name      = "${azurerm_virtual_network.web_server_vnet.name}"
+  address_prefix            = "${var.web_server_subnets[count.index]}"
   network_security_group_id = "${azurerm_network_security_group.web_server_nsg.id}"
+  count                     = "${length(var.web_server_subnets)}"
 }
 # Public IP Address
  resource "azurerm_public_ip" "web_server_publicip"{
@@ -62,7 +67,7 @@ resource "azurerm_network_interface" "web_server_nic"{
 
   ip_configuration {
     name                          = "${var.web_server_name}-${format("%02d", count.index)}-ip"
-    subnet_id                     = "${azurerm_subnet.web_server_subnet.id}"
+    subnet_id                     = "${azurerm_subnet.web_server_subnet.*.id[count.index]}"
     public_ip_address_id          = "${azurerm_public_ip.web_server_publicip.*.id[count.index]}"
 
     # public ip allocation - uncomment the following line of code
@@ -73,23 +78,24 @@ resource "azurerm_network_interface" "web_server_nic"{
 }
 # NSG Creation
 resource "azurerm_network_security_group" "web_server_nsg" {
-  name = "${var.resource_prefix}-nsg"
-  location = "${var.web_server_location}"
+  name                = "${var.resource_prefix}-nsg"
+  location            = "${var.web_server_location}"
   resource_group_name = "${azurerm_resource_group.web_server_rg.name}"
 }
 # Rule-set for NSG
 resource "azurerm_network_security_rule" "web_server_nsg_rule_rdp" {
-  name = "RDP Inbound"
-  priority = 100
-  direction = "Inbound"
-  access = "Allow"
-  protocol = "TCP"
-  source_address_prefix = "*"
-  source_port_range = "*"
-  destination_address_prefix = "*"
-  destination_port_range = "3389"
-  resource_group_name = "${azurerm_resource_group.web_server_rg.name}"
+  name                        = "RDP Inbound"
+  priority                    = 100
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "TCP"
+  source_address_prefix       = "*"
+  source_port_range           = "*"
+  destination_address_prefix  = "*"
+  destination_port_range      = "3389"
+  resource_group_name         = "${azurerm_resource_group.web_server_rg.name}"
   network_security_group_name = "${azurerm_network_security_group.web_server_nsg.name}"
+  count                       = "${var.environment == "production" ? 0:1}"
 }
 
 # Creating the Virutal Machine
