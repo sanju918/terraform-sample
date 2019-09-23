@@ -15,7 +15,7 @@ variable "environment" {}
 # Configure the Azure Provider
 provider "azurerm" {
   # whilst the `version` attribute is optional, we recommend pinning to a given version of the Provider
-  version         = "1.28.0"
+  version         = ">=1.28.0"
   #client_id       = "${var.client_id}"
   #client_secret   = "${var.client_secret}"
   #tenant_id       = "${var.tenant_id}"
@@ -96,6 +96,7 @@ resource "azurerm_virtual_machine" "web_server" {
   resource_group_name   = "${azurerm_resource_group.web_server_rg.name}"
   network_interface_ids = ["${azurerm_network_interface.web_server_nic.id}"]
   vm_size               = "Standard_B1s"
+  availability_set_id = "${azurerm_availability_set.web_server_availability_set.id}"
 
   storage_image_reference {
     publisher = "MicrosoftWindowsServer"
@@ -119,6 +120,15 @@ resource "azurerm_virtual_machine" "web_server" {
 
   os_profile_windows_config {}
 }
+
+resource "azurerm_availability_set" "web_server_availability_set" {
+  name                        = "${var.web_server_name}"
+  location                    = "${var.web_server_location}"
+  resource_group_name         = "${azurerm_resource_group.web_server_rg.name}"
+  managed                     = true
+  platform_fault_domain_count = 2
+}
+
 
 #resource "azurerm_storage_account" "strgacc" {
  # name                      = "${var.resource_prefix}strgacc"
