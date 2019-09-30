@@ -6,9 +6,17 @@ variable "web_server_address_space" {}
 variable "web_server_name" {}
 variable "environment" {}
 variable "web_server_count" {}
+variable "terraform_script_version" {}
+
 variable "web_server_subnets" {
   type = "list"
 }
+
+locals {
+  web_server_name   = "${var.environment == "production" ? "${var.web_server_name}-prd" : "${var.web_server_name}-dev" }"
+  build_environment = "${var.environment == "production" ? "production" : "development"}"
+}
+
 
 # Configure the Azure Provider
 provider "azurerm" {
@@ -18,6 +26,10 @@ provider "azurerm" {
 resource "azurerm_resource_group" "web_server_rg" { 
   name     = "${var.web_server_rg}"
   location = "${var.web_server_location}"
+  tags= {
+    environment = "Production"
+    build-version = "1.00"
+  }
 }
 # Create a vnet
 resource "azurerm_virtual_network" "web_server_vnet" {
@@ -66,7 +78,7 @@ resource "azurerm_network_security_rule" "web_server_nsg_rule_rdp" {
 
 # Creating the Virutal Machine Scaleset
 resource "azurerm_virtual_machine_scale_set" "web_server" {
-  name                  = "${var.web_server_name}-scale-set"
+  name                  = "${local.web_server_name}-scale-set"
   location              = "${var.web_server_location}"
   resource_group_name   = "${azurerm_resource_group.web_server_rg.name}"
   upgrade_policy_mode   = "manual"
@@ -92,7 +104,7 @@ resource "azurerm_virtual_machine_scale_set" "web_server" {
   }
 
   os_profile {
-    computer_name_prefix  = "${var.web_server_name}"
+    computer_name_prefix  = "${local.web_server_name}"
     admin_username        = "cenzer2"
     admin_password        = "P@ssw0rd@1234"
   }
@@ -106,7 +118,7 @@ resource "azurerm_virtual_machine_scale_set" "web_server" {
   primary     = true
 
     ip_configuration {
-      name      = "${var.web_server_name}"
+      name      = "${local.web_server_name}"
       primary   = true
       subnet_id = "${azurerm_subnet.web_server_subnet.*.id[0]}"
     }
